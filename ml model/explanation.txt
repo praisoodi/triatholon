@@ -1,0 +1,30 @@
+Team Name:Benzo
+Team ID:AXST2400377
+
+
+Code Breakdown:
+Data Loading:
+
+Load the datasets train_features.csv, train_targets_scored.csv, test_features.csv, and the sample_submission.csv for the submission format.
+Data Preprocessing:
+
+Drop the sig_id and cp_type columns (since control perturbations have no MoA).
+Normalize the gene expression and cell viability data using StandardScaler.
+Model Building:
+
+Build a logistic regression model using MultiOutputClassifier for multi-label classification.
+For comparison, also build an XGBoost model using XGBClassifier.
+Model Evaluation:
+
+Calculate logarithmic loss (log loss) for both models to evaluate their performance.
+Use Stratified K-Fold Cross Validation for further validation, giving a more reliable performance estimate.
+Predictions:
+
+Use the best-performing model to predict the test data and format the output according to the submission requirements.
+Submission:
+
+The predicted probabilities for each MoA are saved in a submission.csv file, which you can submit to the competition or platform.
+Next Steps:
+You can further tune the models by adjusting the hyperparameters of logistic regression or XGBoost.
+Try ensemble models by combining the results of both Logistic Regression and XGBoost.
+Use neural networks for more complex models if you want to explore deep learning.

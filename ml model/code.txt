@@ -1,0 +1,87 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.metrics import log_loss
+from xgboost import XGBClassifier
+
+# Load datasets
+train_features = pd.read_csv('train_features.csv')
+train_targets_scored = pd.read_csv('train_targets_scored.csv')
+test_features = pd.read_csv('test_features.csv')
+submission = pd.read_csv('sample_submission.csv')
+
+# Drop 'sig_id' and 'cp_type' columns from features, as 'cp_type' control perturbations are irrelevant for MoA predictions
+X = train_features.drop(['sig_id', 'cp_type'], axis=1)
+y = train_targets_scored.drop(['sig_id'], axis=1)
+
+# Test features, remove 'sig_id' and 'cp_type'
+X_test = test_features.drop(['sig_id', 'cp_type'], axis=1)
+
+# Normalize the features using StandardScaler
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+X_test_scaled = scaler.transform(X_test)
+
+# Split the training data for validation
+X_train, X_valid, y_train, y_valid = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Baseline Logistic Regression Model with MultiOutputClassifier for multi-label classification
+logreg = LogisticRegression(max_iter=1000)
+multi_target_model = MultiOutputClassifier(logreg)
+multi_target_model.fit(X_train, y_train)
+
+# Make predictions on the validation set
+y_pred_proba = multi_target_model.predict_proba(X_valid)
+y_pred = np.array([prob[:, 1] for prob in y_pred_proba]).T
+
+# Calculate Logarithmic Loss for Logistic Regression
+logloss = log_loss(y_valid, y_pred)
+print(f'Log Loss (Logistic Regression): {logloss}')
+
+# XGBoost Model for comparison
+xgb = XGBClassifier(objective='binary:logistic', eval_metric='logloss', use_label_encoder=False)
+multi_target_xgb = MultiOutputClassifier(xgb)
+multi_target_xgb.fit(X_train, y_train)
+
+# Make predictions with XGBoost
+y_pred_proba_xgb = multi_target_xgb.predict_proba(X_valid)
+y_pred_xgb = np.array([prob[:, 1] for prob in y_pred_proba_xgb]).T
+
+# Calculate Logarithmic Loss for XGBoost
+logloss_xgb = log_loss(y_valid, y_pred_xgb)
+print(f'Log Loss (XGBoost): {logloss_xgb}')
+
+# Cross-Validation using StratifiedKFold
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+loglosses = []
+
+for train_index, test_index in skf.split(X_scaled, y):
+    X_train_fold, X_test_fold = X_scaled[train_index], X_scaled[test_index]
+    y_train_fold, y_test_fold = y.iloc[train_index], y.iloc[test_index]
+
+    # Train model on each fold (using Logistic Regression here)
+    multi_target_model.fit(X_train_fold, y_train_fold)
+    y_pred_fold = multi_target_model.predict_proba(X_test_fold)
+    y_pred_fold = np.array([prob[:, 1] for prob in y_pred_fold]).T
+
+    # Calculate Log Loss for each fold
+    fold_logloss = log_loss(y_test_fold, y_pred_fold)
+    loglosses.append(fold_logloss)
+
+# Average Log Loss across folds
+avg_logloss = np.mean(loglosses)
+print(f'Average Log Loss (Cross-Validation): {avg_logloss}')
+
+# Final predictions on the test dataset using the best-performing model (choose Logistic Regression or XGBoost)
+test_pred_proba = multi_target_model.predict_proba(X_test_scaled)
+test_pred = np.array([prob[:, 1] for prob in test_pred_proba]).T
+
+# Prepare the submission file
+submission.iloc[:, 1:] = test_pred
+submission.to_csv('submission.csv', index=False)
+
+print("Submission file created.")
